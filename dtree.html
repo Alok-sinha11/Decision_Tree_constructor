@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decision Tree Generator (ID3)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: rgba(255,255,255,0.06);
+            --panel-strong: rgba(255,255,255,0.12);
+            --accent: #7c3aed;
+            --accent-2: #10b981;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Inter", system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at 20% 20%, rgba(124,58,237,0.22), transparent 30%),
+                        radial-gradient(circle at 80% 0%, rgba(16,185,129,0.18), transparent 25%),
+                        radial-gradient(circle at 50% 80%, rgba(59,130,246,0.2), transparent 30%),
+                        var(--bg);
+            color: var(--text);
+            padding: clamp(16px, 3vw, 32px);
+        }
+        .wrapper {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .title h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        .badge {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, var(--accent), #22d3ee);
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--panel-strong);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 25px 80px rgba(0,0,0,0.35);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: clamp(12px, 2vw, 20px);
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--muted);
+            letter-spacing: 0.2px;
+        }
+        textarea, select, button, input {
+            width: 100%;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: var(--text);
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 15px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+        }
+        textarea {
+            min-height: 140px;
+            resize: vertical;
+        }
+        textarea:focus, select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(124,58,237,0.25);
+        }
+        button {
+            cursor: pointer;
+            border: none;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            background: linear-gradient(135deg, var(--accent), #22d3ee);
+            color: white;
+            text-transform: uppercase;
+            box-shadow: 0 10px 30px rgba(124,58,237,0.4);
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 38px rgba(124,58,237,0.5);
+        }
+        button.flash {
+            background: linear-gradient(135deg, var(--accent-2), #22d3ee) !important;
+            box-shadow: 0 12px 26px rgba(16,185,129,0.4);
+        }
+        button.secondary {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border: 1px solid var(--panel-strong);
+            box-shadow: none;
+            text-transform: none;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .output-panel {
+            margin-top: 16px;
+        }
+        pre {
+            background: #0b1120;
+            color: #a5f3fc;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            border: 1px solid rgba(255,255,255,0.06);
+            overflow-x: auto;
+            max-height: 420px;
+        }
+        .chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .chip {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--panel-strong);
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .stat {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--panel-strong);
+        }
+        .stat .label {
+            color: var(--muted);
+            font-size: 12px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat .value {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .footnote {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .svg-wrap {
+            margin-top: 14px;
+            background: #0b1120;
+            border-radius: 14px;
+            border: 1px solid rgba(67, 33, 33, 0.06);
+            overflow: auto;
+            max-height: 520px;
+        }
+        svg {
+            display: block;
+        }
+        .edge-label {
+            font-size: 12px;
+            fill: var(--muted);
+        }
+        .node-circle {
+            fill: url(#nodeGradient);
+            stroke: rgba(255,255,255,0.12);
+            stroke-width: 1.2;
+        }
+        .node-text {
+            fill: #e2e8f0;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .leaf {
+            fill: #10b981;
+        }
+        @media (max-width: 640px) {
+            header { flex-direction: column; align-items: flex-start; }
+            .title h1 { font-size: 24px; }
+            .grid { grid-template-columns: 1fr; }
+            pre { max-height: 320px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+            <div class="title">
+                <div class="badge">ID3</div>
+                <h1>Decision Tree Generator</h1>
+            </div>
+            <div class="chips">
+                <div class="chip">Entropy</div>
+                <div class="chip">Information Gain</div>
+                <div class="chip">ASCII Tree</div>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="panel">
+                <label for="preset">Starter datasets</label>
+                <select id="preset">
+                    <option value="custom">Custom input</option>
+                    <option value="golf" selected>Play Tennis (classic)</option>
+                    <option value="weather">Weather (rain?)</option>
+                </select>
+
+                <div style="margin-top:16px;">
+                    <label for="attributes">Attributes (comma separated)</label>
+                    <textarea id="attributes">Outlook,Temperature,Humidity,Play</textarea>
+                </div>
+
+                <div style="margin-top:14px;">
+                    <label for="data">Dataset (one row per line)</label>
+                    <textarea id="data">Sunny,Hot,High,No
+Sunny,Mild,High,No
+Overcast,Hot,High,Yes
+Rain,Mild,High,Yes
+Rain,Cool,Normal,Yes</textarea>
+                </div>
+
+                <div class="controls" style="margin-top:16px;">
+                    <button id="btn-generate" onclick="generateTree()">Generate Tree</button>
+                    <button id="btn-copy" class="secondary" onclick="copyTree()">Copy Output</button>
+                    <button id="btn-share" class="secondary" onclick="shareWhatsApp()">Share WhatsApp</button>
+                    <button id="btn-clear" class="secondary" onclick="clearAll()">Clear</button>
+                </div>
+
+                <div class="footnote">
+                    Last column is treated as the target/class label.
+                </div>
+            </div>
+
+            <div class="panel output-panel">
+                <label>Output</label>
+                <pre id="output">Your tree will appear here...</pre>
+
+                <div class="stats">
+                    <div class="stat">
+                        <div class="label">Nodes</div>
+                        <div class="value" id="stat-nodes">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Depth</div>
+                        <div class="value" id="stat-depth">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Entropy (root)</div>
+                        <div class="value" id="stat-entropy">-</div>
+                    </div>
+                </div>
+
+                <div class="svg-wrap">
+                    <svg id="tree-svg" width="100%" height="320" preserveAspectRatio="xMinYMin meet">
+                        <text x="20" y="30" fill="#94a3b8" font-size="13">Visual tree will render here...</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ======= JavaScript Implementation of ID3 Algorithm =======
+
+function entropy(arr) {
+    const freq = {};
+    arr.forEach(v => freq[v] = (freq[v] || 0) + 1);
+    const n = arr.length;
+    return Object.values(freq).reduce((H, count) => {
+        const p = count / n;
+        return H - p * Math.log2(p);
+    }, 0);
+}
+
+function splitData(data, colIndex, value) {
+    return data.filter(row => row[colIndex] === value);
+}
+
+function unique(arr) {
+    return [...new Set(arr)];
+}
+
+function pure(data, classIndex) {
+    const first = data[0][classIndex];
+    return data.every(r => r[classIndex] === first);
+}
+
+function ID3(data, attributes, classIndex) {
+    if (pure(data, classIndex)) {
+        return { leaf: true, label: data[0][classIndex] };
+    }
+
+    if (attributes.length === 1) {
+        const freq = {};
+        data.forEach(r => freq[r[classIndex]] = (freq[r[classIndex]] || 0) + 1);
+        const best = Object.keys(freq).sort((a, b) => freq[b] - freq[a])[0];
+        return { leaf: true, label: best };
+    }
+
+    const baseEntropy = entropy(data.map(r => r[classIndex]));
+    let bestGain = -1, bestAttr = -1;
+
+    for (let i = 0; i < attributes.length; i++) {
+        if (i === classIndex) continue;
+
+        const values = unique(data.map(row => row[i]));
+        let newEntropy = 0;
+
+        values.forEach(v => {
+            const subset = splitData(data, i, v);
+            newEntropy += (subset.length / data.length) *
+                entropy(subset.map(r => r[classIndex]));
+        });
+
+        const gain = baseEntropy - newEntropy;
+        if (gain > bestGain) {
+            bestGain = gain;
+            bestAttr = i;
+        }
+    }
+
+    const node = { leaf: false, attribute: attributes[bestAttr], children: {} };
+    const values = unique(data.map(row => row[bestAttr]));
+    values.forEach(v => {
+        const subset = splitData(data, bestAttr, v);
+        node.children[v] = ID3(subset, attributes, classIndex);
+    });
+
+    return node;
+}
+
+function printTree(node, prefix = "", last = true) {
+    let out = prefix + (last ? "└── " : "├── ");
+
+    if (node.leaf) {
+        return out + "(class) " + node.label + "\n";
+    }
+
+    out += node.attribute + "\n";
+    const keys = Object.keys(node.children);
+
+    keys.forEach((k, i) => {
+        out += prefix + (last ? "    " : "│   ") + "[" + k + "]\n";
+        out += printTree(node.children[k], prefix + (last ? "    " : "│   "), i === keys.length - 1);
+    });
+
+    return out;
+}
+
+// ======= Visualization (simple tree layout on SVG) =======
+function renderTreeSVG(root) {
+    const svg = document.getElementById("tree-svg");
+    const spacingX = 140;
+    const spacingY = 90;
+    const radius = 22;
+    const margin = 32;
+
+    if (!root) {
+        svg.innerHTML = '<text x="20" y="30" fill="#94a3b8" font-size="13">No tree to display.</text>';
+        return;
+    }
+
+    const sizeCache = new Map();
+    const measure = (node) => {
+        if (sizeCache.has(node)) return sizeCache.get(node);
+        const size = node.leaf ? 1 : Object.values(node.children).reduce((s, c) => s + measure(c), 0);
+        sizeCache.set(node, size);
+        return size;
+    };
+
+    const nodes = [];
+    const edges = [];
+
+    const place = (node, depth, startX) => {
+        if (node.leaf) {
+            const x = startX;
+            const y = depth * spacingY;
+            nodes.push({ node, x, y });
+            return { center: x, width: 1 };
+        }
+
+        const kids = Object.entries(node.children);
+        let cursor = startX;
+        const centers = [];
+        kids.forEach(([label, child]) => {
+            const w = measure(child);
+            const childRes = place(child, depth + 1, cursor);
+            centers.push({ label, childCenter: childRes.center, child });
+            cursor += w;
+        });
+
+        const center = (centers[0].childCenter + centers[centers.length - 1].childCenter) / 2;
+        nodes.push({ node, x: center, y: depth * spacingY });
+        centers.forEach(c => edges.push({ from: node, to: c.child, label: c.label }));
+        return { center, width: cursor - startX };
+    };
+
+    const totalWidthUnits = measure(root);
+    place(root, 0, 0);
+
+    const minX = Math.min(...nodes.map(n => n.x));
+    const maxX = Math.max(...nodes.map(n => n.x));
+    const maxY = Math.max(...nodes.map(n => n.y));
+
+    const widthPx = (maxX - minX + 1) * spacingX + margin * 2;
+    const heightPx = maxY + spacingY + margin;
+
+    const projectX = (x) => (x - minX) * spacingX + margin;
+    const projectY = (y) => y + margin;
+
+    const nodeIndex = new Map(nodes.map((n, i) => [n.node, i]));
+
+    const edgeEls = edges.map(edge => {
+        const from = nodes[nodeIndex.get(edge.from)];
+        const to = nodes[nodeIndex.get(edge.to)];
+        const x1 = projectX(from.x);
+        const y1 = projectY(from.y);
+        const x2 = projectX(to.x);
+        const y2 = projectY(to.y);
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2 - 6;
+        return `
+            <line x1="${x1}" y1="${y1 + radius}" x2="${x2}" y2="${y2 - radius}" stroke="rgba(148,163,184,0.55)" stroke-width="1.5" />
+            <text class="edge-label" x="${mx}" y="${my}" text-anchor="middle">${edge.label}</text>
+        `;
+    }).join("");
+
+    const nodeEls = nodes.map(n => {
+        const x = projectX(n.x);
+        const y = projectY(n.y);
+        const isLeaf = n.node.leaf;
+        const label = isLeaf ? n.node.label : n.node.attribute;
+        return `
+            <g>
+                <circle class="node-circle ${isLeaf ? "leaf" : ""}" cx="${x}" cy="${y}" r="${radius}"></circle>
+                <text class="node-text" x="${x}" y="${y + 4}" text-anchor="middle">${label}</text>
+            </g>
+        `;
+    }).join("");
+
+    svg.setAttribute("width", widthPx);
+    svg.setAttribute("height", heightPx);
+    svg.innerHTML = `
+        <defs>
+            <linearGradient id="nodeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#7c3aed" />
+                <stop offset="100%" stop-color="#22d3ee" />
+            </linearGradient>
+        </defs>
+        ${edgeEls}
+        ${nodeEls}
+    `;
+}
+
+// Helpers for UI
+function countNodes(node) {
+    if (!node || node.leaf) return 1;
+    return 1 + Object.values(node.children).reduce((sum, child) => sum + countNodes(child), 0);
+}
+
+function depth(node) {
+    if (!node || node.leaf) return 1;
+    const childDepths = Object.values(node.children).map(depth);
+    return 1 + Math.max(...childDepths);
+}
+
+function generateTree() {
+    const attr = document.getElementById("attributes").value.split(",").map(a => a.trim()).filter(Boolean);
+    const rawData = document.getElementById("data").value.trim().split("\n").filter(Boolean);
+    if (!attr.length || !rawData.length) {
+        document.getElementById("output").textContent = "Please provide attributes and data.";
+        flashButton("btn-generate");
+        return;
+    }
+
+    const data = rawData.map(row => row.split(",").map(x => x.trim()));
+    const classIndex = attr.length - 1;
+
+    const tree = ID3(data, attr, classIndex);
+    const treeTxt = printTree(tree);
+
+    document.getElementById("output").textContent = treeTxt;
+    document.getElementById("stat-nodes").textContent = countNodes(tree);
+    document.getElementById("stat-depth").textContent = depth(tree);
+    document.getElementById("stat-entropy").textContent = entropy(data.map(r => r[classIndex])).toFixed(3);
+    renderTreeSVG(tree);
+    flashButton("btn-generate");
+}
+
+function clearAll() {
+    document.getElementById("attributes").value = "";
+    document.getElementById("data").value = "";
+    document.getElementById("output").textContent = "Your tree will appear here...";
+    document.getElementById("stat-nodes").textContent = "-";
+    document.getElementById("stat-depth").textContent = "-";
+    document.getElementById("stat-entropy").textContent = "-";
+    document.getElementById("tree-svg").innerHTML = '<text x="20" y="30" fill="#94a3b8" font-size="13">Visual tree will render here...</text>';
+    flashButton("btn-clear");
+}
+
+function copyTree() {
+    const text = document.getElementById("output").textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        flashButton("btn-copy");
+    });
+}
+
+function shareWhatsApp() {
+    const treeText = document.getElementById("output").textContent || "";
+    const link = window.location.href;
+    const message = `Decision Tree:\n${treeText}\n\nLink: ${link}`;
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+    flashButton("btn-share");
+}
+
+function flashButton(id) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.add("flash");
+    setTimeout(() => btn.classList.remove("flash"), 400);
+}
+
+// Presets
+const presets = {
+    golf: {
+        attrs: "Outlook,Temperature,Humidity,Windy,Play",
+        data: `Sunny,Hot,High,False,No
+Sunny,Hot,High,True,No
+Overcast,Hot,High,False,Yes
+Rain,Mild,High,False,Yes
+Rain,Cool,Normal,False,Yes
+Rain,Cool,Normal,True,No
+Overcast,Cool,Normal,True,Yes
+Sunny,Mild,High,False,No
+Sunny,Cool,Normal,False,Yes
+Rain,Mild,Normal,False,Yes
+Sunny,Mild,Normal,True,Yes
+Overcast,Mild,High,True,Yes
+Overcast,Hot,Normal,False,Yes
+Rain,Mild,High,True,No`
+    },
+    weather: {
+        attrs: "Outlook,Temp,Humidity,Wind,RainTomorrow",
+        data: `Sunny,Hot,High,Weak,No
+Sunny,Hot,High,Strong,No
+Overcast,Hot,High,Weak,Yes
+Rain,Mild,High,Weak,Yes
+Rain,Cool,Normal,Weak,Yes
+Rain,Cool,Normal,Strong,No
+Overcast,Cool,Normal,Strong,Yes
+Sunny,Mild,High,Weak,No
+Sunny,Cool,Normal,Weak,Yes
+Rain,Mild,Normal,Weak,Yes
+Sunny,Mild,Normal,Strong,Yes
+Overcast,Mild,High,Strong,Yes
+Overcast,Hot,Normal,Weak,Yes
+Rain,Mild,High,Strong,No`
+    }
+};
+
+document.getElementById("preset").addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val === "custom") return;
+    document.getElementById("attributes").value = presets[val].attrs;
+    document.getElementById("data").value = presets[val].data;
+});
+
+// Auto-generate on load
+generateTree();
+</script>
+</body>
+</html>
